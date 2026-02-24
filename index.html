@@ -145,45 +145,40 @@
         }
     }
 
-    async function updatePrices() {
-        const status = document.getElementById('status-msg');
-        status.innerText = "⏳ 正在請求 API 數據 (透過備援代理伺服器)...";
-        status.style.color = "#ffd700";
+async function updatePrices() {
+    const status = document.getElementById('status-msg');
+    status.innerText = "⏳ 正在同步本地自動化數據...";
 
-        const apiUrl = 'https://www.milkywayidle.com/game_data/marketplace.json';
-        // 使用更強大的 allorigins 穿透模式
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}&t=${Date.now()}`;
+    try {
+        // 使用相對路徑讀取 Actions 產出的資料
+        // 加入時間戳記避免瀏覽器快取舊價格
+        const res = await fetch('./data.json?t=' + Date.now()); 
+        if (!res.ok) throw new Error("尚未找到 data.json，請先手動執行一次 Actions");
+        
+        const data = await res.json();
+        const market = data.marketplace;
 
-        try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error();
+        items.forEach((item, i) => {
+            const lvl = document.getElementById(`lvl-${i}`).value;
+            const hrid = `/items/${lvl}_${item.hrid_base}`;
+            const found = market.find(m => m.itemHrid === hrid);
+            if (found) {
+                document.getElementById(`prc-${i}`).value = found.ask;
+            }
+        });
 
-            const data = await response.json();
-            // 關鍵：處理 Mooket 類型的內容解析
-            const marketplaceData = JSON.parse(data.contents);
-            const market = marketplaceData.marketplace;
-
-            items.forEach((item, j) => {
-                const lvl = document.getElementById(`lvl-${j}`).value;
-                const hrid = `/items/${lvl}_${item.hrid_base}`;
-                const found = market.find(m => m.itemHrid === hrid);
-                if (found) {
-                    // 參考 Mooket 邏輯使用 ask 價格
-                    document.getElementById(`prc-${j}`).value = found.ask;
-                }
-            });
-
-            status.innerText = "✅ 同步成功！ (" + new Date().toLocaleTimeString() + ")";
-            status.style.color = "#4fd1c5";
-            calculate();
-        } catch (err) {
-            console.error(err);
-            status.innerText = "❌ 讀取失敗。這通常是代理伺服器忙碌，請稍後再試。";
-            status.style.color = "#ff4d4d";
-        }
+        status.innerText = "✅ 同步成功！(數據每 30 分鐘自動更新)";
+        status.style.color = "#4fd1c5";
+        calculate();
+    } catch (e) {
+        console.error(e);
+        status.innerText = "❌ 讀取失敗：" + e.message;
+        status.style.color = "#ff4d4d";
     }
+}
 
     window.onload = init;
 </script>
 </body>
 </html>
+
