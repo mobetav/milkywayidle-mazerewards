@@ -83,10 +83,10 @@
 </div>
 
 <script>
-
+// 修正道具清單：對齊官方 data.json 的 hrid_base
 const items = [
     { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
-    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' },
+    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' }, // 迷宮斗篷是 shroud
     { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
     { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
     { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
@@ -112,6 +112,47 @@ function init() {
     calculate();
 }
 
+async function updatePrices() {
+    const status = document.getElementById('status-msg');
+    status.innerText = "⏳ 正在同步數據...";
+
+    try {
+        // 使用相對路徑，避免 GitHub Pages 子路徑問題
+        const res = await fetch('./data.json?t=' + Date.now());
+        if (!res.ok) throw new Error("讀取 data.json 失敗");
+
+        const data = await res.json();
+        // 您的資料格式是在 marketData 物件下
+        const market = data.marketData;
+
+        if (!market) throw new Error("數據結構不匹配 (找不到 marketData)");
+
+        // 1. 同步精煉碎片 (labyrinth_refinement_shard)
+        const shardHrid = "/items/labyrinth_refinement_shard";
+        if (market[shardHrid] && market[shardHrid]["0"]) {
+            document.getElementById('refining-shard-price').value = market[shardHrid]["0"].a;
+        }
+
+        // 2. 同步其他消耗品
+        items.forEach((item, i) => {
+            const lvl = document.getElementById(`lvl-${i}`).value;
+            const hrid = `/items/${lvl}_${item.hrid_base}`;
+            
+            // 物件讀取方式：market["/items/expert_torch"]["0"].a
+            if (market[hrid] && market[hrid]["0"]) {
+                document.getElementById(`prc-${i}`).value = market[hrid]["0"].a;
+            }
+        });
+
+        status.innerText = "✅ 同步成功！(" + new Date().toLocaleTimeString() + ")";
+        status.style.color = "#4fd1c5";
+        calculate();
+    } catch (e) {
+        status.innerText = "❌ 失敗：" + e.message;
+        status.style.color = "#ff4d4d";
+    }
+}
+
 function calculate() {
     let totalCost = 0;
     items.forEach((_, i) => {
@@ -126,82 +167,18 @@ function calculate() {
     const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
     const shardVal = parseFloat(document.getElementById('refining-shard-price').value) || 0;
 
-    let accTokens = 0;
-    let accOtherRev = 0;
-
+    let accTokens = 0, accOther = 0;
     for (let l = 1; l <= 10; l++) {
-        const layerTokens = (5 * l) + (l * 0.5); 
-        accTokens += layerTokens;
-        let layerOtherRev = (l * 0.12) * boxVal;
+        accTokens += (5 * l) + (l * 0.5);
+        let layerOther = (l * 0.12) * boxVal;
         if (l >= 6) {
-            const chestQty = (l - 4) / 2;
-            // 根據你的機率圖修正為 1.8 期望值 (含 5% 大獎)
-            const shardQty = chestQty * 1.8; 
-            layerOtherRev += (shardQty * shardVal);
+            // 包含 5% 大獎機率的精煉碎片期望值：1.8
+            layerOther += ((l - 4) / 2) * 1.8 * shardVal;
         }
-        accOtherRev += layerOtherRev;
-
-        revBody.innerHTML += `
-            <tr>
-                <td>到第 ${l} 層出口累計</td>
-                <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
-                <td class="other-val">${Math.round(accOtherRev).toLocaleString()}</td>
-            </tr>
-        `;
+        accOther += layerOther;
+        revBody.innerHTML += `<tr><td>到第 ${l} 層累計</td><td class="token-qty">${Math.round(accTokens)}</td><td class="other-val">${Math.round(accOther).toLocaleString()}</td></tr>`;
     }
 }
-
-// 3. 修正同步邏輯：正確抓取 labyrinth_refinement_shard 與各類物品
-async function updatePrices() {
-    const status = document.getElementById('status-msg');
-    status.innerText = "⏳ 正在分析自動化數據...";
-
-    try {
-        const res = await fetch('./data.json?nocache=' + new Date().getTime());
-        if (!res.ok) throw new Error(`找不到數據檔案 (${res.status})`);
-
-        const data = await res.json();
-        const market = data.marketData;
-
-        // A. 先更新精煉碎片單價 (labyrinth_refinement_shard)
-        const shardHrid = "/items/labyrinth_refinement_shard";
-        if (market[shardHrid] && market[shardHrid]["0"]) {
-            document.getElementById('refining-shard-price').value = market[shardHrid]["0"].a;
-        }
-
-        // B. 更新各項消耗品單價
-        items.forEach((item, i) => {
-            const lvl = document.getElementById(`lvl-${i}`).value;
-            // 嘗試兩種路徑格式 (有的帶等級前綴，有的不帶)
-            const possibleHrids = [
-                `/items/${lvl}_${item.hrid_base}`,
-                `/items/${item.hrid_base}`
-            ];
-            
-            let foundData = null;
-            for (let hrid of possibleHrids) {
-                if (market[hrid]) {
-                    foundData = market[hrid];
-                    break;
-                }
-            }
-            
-            if (foundData && foundData["0"]) {
-                document.getElementById(`prc-${i}`).value = foundData["0"].a;
-            }
-        });
-
-        status.innerText = "✅ 同步成功！(" + new Date().toLocaleTimeString() + ")";
-        status.style.color = "#4fd1c5";
-        calculate();
-        
-    } catch (e) {
-        console.error("同步失敗:", e);
-        status.innerText = "❌ 失敗：" + e.message;
-        status.style.color = "#ff4d4d";
-    }
-}
-
 window.onload = init;
 </script>
 </body>
