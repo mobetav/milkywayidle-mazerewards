@@ -1,0 +1,25 @@
+name: Update MWI Market Data
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # 每 30 分鐘自動更新一次
+  workflow_dispatch:      # 允許手動點擊按鈕更新
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Fetch Market Data
+        run: |
+          curl -H "User-Agent: Mozilla/5.0" https://www.milkywayidle.com/game_data/marketplace.json -o data.json
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add data.json
+          git commit -m "🚀 自動更新市場單價: $(date)" || exit 0
+          git push
