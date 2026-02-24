@@ -12,8 +12,8 @@
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.85rem; }
         th { background: #2d3748; color: var(--gold); padding: 10px; text-align: left; }
         td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
-        
-        /* 表格寬度比例 */
+
+        /* 表格寬度比例 */        
         .config-table th:nth-child(1), .config-table td:nth-child(1) { width: 15%; }
         .config-table th:nth-child(2), .config-table td:nth-child(2) { width: 15%; }
         .config-table th:nth-child(3), .config-table td:nth-child(3) { width: 20%; }
@@ -25,9 +25,6 @@
         .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; transition: 0.2s; }
         .btn-fetch:hover { background: #e6c200; transform: translateY(-1px); }
         .status { text-align: center; font-size: 0.8rem; color: #718096; margin-bottom: 10px; min-height: 1.2em; }
-        .rev-table td:first-child { text-align: left; }
-        .rev-table th:nth-child(2), .rev-table td:nth-child(2) { text-align: center; }
-        .rev-table th:nth-child(3), .rev-table td:nth-child(3) { text-align: right; }
     </style>
 </head>
 <body>
@@ -36,7 +33,7 @@
     <h2>銀河奶牛迷宮收益</h2>
     
     <div id="status-msg" class="status">提示：數據每 30 分鐘自動同步一次</div>
-    <button class="btn-fetch" onclick="updatePrices()">🔄 更新市場價格</button>
+    <button class="btn-fetch" onclick="updatePrices()">🔄 更新市場價格 (從本地 data.json)</button>
 
     <div class="grid-layout">
         <div>
@@ -50,17 +47,15 @@
                     <td colspan="2"><input type="number" id="refining-shard-price" value="0" oninput="calculate()"></td>
                 </tr>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
-                    <td colspan="2">紫多拉之盒(生活)</td>
-                    <td colspan="2"><input type="number" id="box-price" value="0" oninput="calculate()"></td>
+                    <td colspan="2">紫多拉之盒 (生活)</td>
+                    <td colspan="2"><input type="number" id="box-price-life" value="0" oninput="calculate()"></td>
                 </tr>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
-                    <td colspan="2">紫多拉之盒(戰鬥)</td>
-                    <td colspan="2"><input type="number" id="box-price" value="0" oninput="calculate()"></td>
+                    <td colspan="2">紫多拉之盒 (戰鬥)</td>
+                    <td colspan="2"><input type="number" id="box-price-combat" value="0" oninput="calculate()"></td>
                 </tr>
             </table>
-            <div id="total-cost-display" style="text-align: right; font-weight: bold; color: var(--gold); font-size: 1.1rem;">
-                總預估成本：0
-            </div>
+            <div id="total-cost-display" style="text-align: right; font-weight: bold; color: var(--gold); font-size: 1.1rem;">總預估成本：0</div>
         </div>
 
         <div>
@@ -76,14 +71,13 @@
             </table>
             <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
                 * <b>代幣累計</b>：包含出口固定獎勵及房間期望產出。<br>
-                * <b>其他收益</b>：僅計算紫多拉之盒與第 6 層起的迷宮精煉寶箱。
+                * <b>其他收益</b>：紫盒數量平分給生活/戰鬥計算，精煉寶箱以 1.8 碎片估值。
             </div>
         </div>
     </div>
 </div>
 
 <script>
-
 const items = [
     { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
     { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' },
@@ -111,31 +105,31 @@ function init() {
     `).join('');
     calculate();
 }
-// 初始化與同步邏輯
+
 async function updatePrices() {
     const status = document.getElementById('status-msg');
     status.innerText = "⏳ 正在同步自動化數據...";
-
     try {
         const res = await fetch('./data.json?t=' + Date.now());
         if (!res.ok) throw new Error("讀取 data.json 失敗");
-
         const data = await res.json();
         const market = data.marketData;
 
-        // 1. 同步精煉碎片單價 (用於計算寶箱價值)
+        // 同步碎片
         const shardHrid = "/items/labyrinth_refinement_shard";
-        if (market[shardHrid] && market[shardHrid]["0"]) {
-            document.getElementById('refining-shard-price').value = market[shardHrid]["0"].a;
-        }
+        if (market[shardHrid] && market[shardHrid]["0"]) document.getElementById('refining-shard-price').value = market[shardHrid]["0"].a;
 
-        // 2. 同步其他消耗品
+        // 同步紫盒 (戰鬥與生活)
+        const combatBoxHrid = "/items/pandoras_box";
+        const lifeBoxHrid = "/items/skill_pandoras_box";
+        if (market[combatBoxHrid] && market[combatBoxHrid]["0"]) document.getElementById('box-price-combat').value = market[combatBoxHrid]["0"].a;
+        if (market[lifeBoxHrid] && market[lifeBoxHrid]["0"]) document.getElementById('box-price-life').value = market[lifeBoxHrid]["0"].a;
+
+        // 同步消耗品
         items.forEach((item, i) => {
             const lvl = document.getElementById(`lvl-${i}`).value;
             const hrid = `/items/${lvl}_${item.hrid_base}`;
-            if (market[hrid] && market[hrid]["0"]) {
-                document.getElementById(`prc-${i}`).value = market[hrid]["0"].a;
-            }
+            if (market[hrid] && market[hrid]["0"]) document.getElementById(`prc-${i}`).value = market[hrid]["0"].a;
         });
 
         status.innerText = "✅ 同步成功！";
@@ -145,7 +139,6 @@ async function updatePrices() {
     }
 }
 
-// 核心計算邏輯
 function calculate() {
     let totalCost = 0;
     items.forEach((_, i) => {
@@ -157,21 +150,24 @@ function calculate() {
 
     const revBody = document.getElementById('revenue-body');
     revBody.innerHTML = '';
-    const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
-    const shardVal = parseFloat(document.getElementById('refining-shard-price').value) || 0;
+    
+    const pCombat = parseFloat(document.getElementById('box-price-combat').value) || 0;
+    const pLife = parseFloat(document.getElementById('box-price-life').value) || 0;
+    const pShard = parseFloat(document.getElementById('refining-shard-price').value) || 0;
 
-    // 定義精煉寶箱的預期價值 (1.8 個碎片)
-    const SHARD_EXPECTANCY = 1.8;
-    const chestValue = SHARD_EXPECTANCY * shardVal;
+    // 平均盒價 (50% 生活, 50% 戰鬥)
+    const avgBoxPrice = (pCombat + pLife) / 2;
+    // 精煉寶箱期望價值 (1.8 碎片)
+    const chestValue = 1.8 * pShard;
 
     let accTokens = 0, accOther = 0;
     for (let l = 1; l <= 10; l++) {
         accTokens += (5 * l) + (l * 0.5);
         
-        // 其他收益：紫多拉之盒 (0.12/層)
-        let layerOther = (l * 0.12) * boxVal;
+        // 其他收益 1：紫盒 (每層期望獲得 0.12 箱，價值依平均盒價計算)
+        let layerOther = (l * 0.12) * avgBoxPrice;
         
-        // 其他收益：精煉寶箱 (6層起獲得，數量為 (L-4)/2)
+        // 其他收益 2：精煉寶箱 (6層起出口獲得)
         if (l >= 6) {
             const chestQty = (l - 4) / 2;
             layerOther += (chestQty * chestValue);
@@ -186,9 +182,7 @@ function calculate() {
             </tr>`;
     }
 }
-
 window.onload = init;
 </script>
 </body>
 </html>
-
