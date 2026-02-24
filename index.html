@@ -147,32 +147,41 @@
 
 async function updatePrices() {
     const status = document.getElementById('status-msg');
-    status.innerText = "⏳ 正在同步本地自動化數據...";
+    status.innerText = "⏳ 正在從自動化倉庫讀取最新單價...";
 
     try {
-        // 使用相對路徑讀取 Actions 產出的資料
-        // 加入時間戳記避免瀏覽器快取舊價格
-        const res = await fetch('./data.json?t=' + Date.now()); 
-        if (!res.ok) throw new Error("尚未找到 data.json，請先手動執行一次 Actions");
+        // 讀取剛生成的本地 data.json，並加上時間戳記強制刷新快取
+        const res = await fetch('./data.json?t=' + Date.now());
         
+        if (!res.ok) throw new Error("找不到數據檔案，請確認 data.json 是否存在");
+
         const data = await res.json();
         const market = data.marketplace;
+
+        if (!market) throw new Error("數據格式不正確");
 
         items.forEach((item, i) => {
             const lvl = document.getElementById(`lvl-${i}`).value;
             const hrid = `/items/${lvl}_${item.hrid_base}`;
+            
+            // 在 marketplace 陣列中尋找對應的物品
             const found = market.find(m => m.itemHrid === hrid);
+            
             if (found) {
+                // 自動填入最新的 ask 價格
                 document.getElementById(`prc-${i}`).value = found.ask;
             }
         });
 
         status.innerText = "✅ 同步成功！(數據每 30 分鐘自動更新)";
         status.style.color = "#4fd1c5";
+        
+        // 呼叫計算函數更新總成本與收益
         calculate();
+        
     } catch (e) {
         console.error(e);
-        status.innerText = "❌ 讀取失敗：" + e.message;
+        status.innerText = "❌ 同步失敗：" + e.message;
         status.style.color = "#ff4d4d";
     }
 }
@@ -181,4 +190,5 @@ async function updatePrices() {
 </script>
 </body>
 </html>
+
 
