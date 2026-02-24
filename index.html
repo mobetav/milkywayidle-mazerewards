@@ -93,7 +93,7 @@ function init() {
         <tr>
             <td>${item.name}</td>
             <td>
-                <select id="lvl-${i}" onchange="calculate()">
+                <select id="lvl-${i}" onchange="updatePrices()">
                     <option value="basic">基礎</option>
                     <option value="advanced">進階</option>
                     <option value="expert" selected>專家</option>
@@ -186,3 +186,4 @@ window.onload = init;
 </script>
 </body>
 </html>
+
