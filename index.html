@@ -22,8 +22,7 @@
         select, input { background: #0b0e14; color: var(--green); border: 1px solid var(--gold); padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box; }
         .token-qty { color: var(--green); font-weight: bold; text-align: center; }
         .other-val { color: var(--blue); font-weight: bold; text-align: right; }
-        .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; transition: 0.2s; }
-        .btn-fetch:hover { background: #e6c200; transform: translateY(-1px); }
+        .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; }
         .status { text-align: center; font-size: 0.8rem; color: #718096; margin-bottom: 10px; min-height: 1.2em; }
         .rev-table td:first-child { text-align: left; }
         .rev-table th:nth-child(2), .rev-table td:nth-child(2) { text-align: center; }
@@ -35,8 +34,8 @@
 <div class="container">
     <h2>銀河奶牛迷宮收益</h2>
     
-    <div id="status-msg" class="status">提示：請點擊按鈕同步市場即時單價</div>
-    <button class="btn-fetch" onclick="updatePrices()">🔄 更新 API 即時價格 (相容模式)</button>
+    <div id="status-msg" class="status">提示：若更新失敗，請檢查網路連線</div>
+    <button class="btn-fetch" onclick="updatePrices()">🔄 更新 API 即時價格 (多重代理模式)</button>
 
     <div class="grid-layout">
         <div>
@@ -71,8 +70,8 @@
                 <tbody id="revenue-body"></tbody>
             </table>
             <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
-                * <b>代幣累計</b>：含出口固定獎勵及房間期望產出。<br>
-                * <b>其他收益</b>：計算紫多拉之盒與第 6 層起的精煉碎片。
+                * <b>代幣累計</b>：包含出口固定獎勵及房間期望產出。<br>
+                * <b>其他收益</b>：僅計算紫多拉之盒與第 6 層起的精煉碎片。
             </div>
         </div>
     </div>
@@ -125,10 +124,13 @@
         let accOtherRev = 0;
 
         for (let l = 1; l <= 10; l++) {
-            accTokens += (5 * l) + (l * 0.5); 
+            const layerTokens = (5 * l) + (l * 0.5); 
+            accTokens += layerTokens;
             let layerOtherRev = (l * 0.12) * boxVal;
             if (l >= 6) {
-                layerOtherRev += (((l - 4) / 2) * 1.25) * shardVal;
+                const chestQty = (l - 4) / 2;
+                const shardQty = chestQty * 1.25;
+                layerOtherRev += (shardQty * shardVal);
             }
             accOtherRev += layerOtherRev;
 
@@ -144,43 +146,56 @@
 
     async function updatePrices() {
         const status = document.getElementById('status-msg');
-        status.innerText = "⏳ 正在連接市場數據中心...";
+        status.innerText = "⏳ 正在同步數據 (第 1/2 次嘗試)...";
         status.style.color = "#ffd700";
 
         const apiUrl = 'https://www.milkywayidle.com/game_data/marketplace.json';
-        // 嘗試多重代理路徑
-        const proxies = [
+        
+        // 嘗試多重代理方案
+        const proxyUrls = [
             `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}&cb=${Date.now()}`,
             `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`
         ];
 
-        for (const url of proxies) {
-            try {
-                const res = await fetch(url);
-                if (!res.ok) continue;
-                
-                const rawData = await res.json();
-                // 智慧偵測：如果資料在 contents 裡則解析，否則直接讀取
-                const data = rawData.contents ? JSON.parse(rawData.contents) : rawData;
-                const market = data.marketplace;
+        let dataFound = false;
 
-                items.forEach((item, i) => {
-                    const lvl = document.getElementById(`lvl-${i}`).value;
-                    const hrid = `/items/${lvl}_${item.hrid_base}`;
-                    const found = market.find(m => m.itemHrid === hrid);
-                    if (found) document.getElementById(`prc-${i}`).value = found.ask;
-                });
+        for (let i = 0; i < proxyUrls.length; i++) {
+            try {
+                if (i > 0) status.innerText = `⏳ 正在切換備援代理 (第 ${i + 1}/2 次嘗試)...`;
                 
-                status.innerText = "✅ 同步成功！ (" + new Date().toLocaleTimeString() + ")";
-                status.style.color = "#4fd1c5";
-                calculate();
-                return; // 成功獲取後跳出
-            } catch (e) {
-                console.warn("目前代理嘗試失敗，切換中...");
+                const response = await fetch(proxyUrls[i]);
+                if (!response.ok) throw new Error();
+
+                const result = await response.json();
+                // 處理 allorigins 的 contents 包裝或 corsproxy 的直接 JSON
+                const rawData = result.contents ? JSON.parse(result.contents) : result;
+                
+                if (rawData && rawData.marketplace) {
+                    const market = rawData.marketplace;
+                    items.forEach((item, j) => {
+                        const lvl = document.getElementById(`lvl-${j}`).value;
+                        const hrid = `/items/${lvl}_${item.hrid_base}`;
+                        const found = market.find(m => m.itemHrid === hrid);
+                        if (found) {
+                            document.getElementById(`prc-${j}`).value = found.ask;
+                        }
+                    });
+                    dataFound = true;
+                    break;
+                }
+            } catch (err) {
+                console.warn(`代理 ${i + 1} 請求失敗，嘗試下一個...`);
             }
         }
-        status.innerText = "❌ 讀取失敗。請確認是否開啟擋廣告外掛，或手動輸入單價。";
-        status.style.color = "#ff4d4d";
+
+        if (dataFound) {
+            status.innerText = "✅ 市場數據同步成功！ (" + new Date().toLocaleTimeString() + ")";
+            status.style.color = "#4fd1c5";
+            calculate();
+        } else {
+            status.innerText = "❌ 無法從伺服器獲取數據。請檢查網路或手動輸入。";
+            status.style.color = "#ff4d4d";
+        }
     }
 
     window.onload = init;
