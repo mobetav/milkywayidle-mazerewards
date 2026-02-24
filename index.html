@@ -35,8 +35,8 @@
 <div class="container">
     <h2>銀河奶牛迷宮收益</h2>
     
-    <div id="status-msg" class="status">請點擊更新按鈕同步即時市場價格</div>
-    <button class="btn-fetch" onclick="updatePrices()">🔄 更新 API 即時價格</button>
+    <div id="status-msg" class="status">提示：數據每 30 分鐘自動同步一次</div>
+    <button class="btn-fetch" onclick="updatePrices()">🔄 從本地倉庫同步最新單價</button>
 
     <div class="grid-layout">
         <div>
@@ -46,7 +46,7 @@
                 </thead>
                 <tbody id="config-body"></tbody>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
-                    <td colspan="2" style="color: var(--blue);">精煉碎片市場估價</td>
+                    <td colspan="2" style="color: var(--blue);">精煉碎片估價</td>
                     <td colspan="2"><input type="number" id="refining-shard-price" value="2500000" oninput="calculate()"></td>
                 </tr>
                 <tr style="background: rgba(255, 215, 0, 0.05);">
@@ -150,20 +150,20 @@ async function updatePrices() {
     status.innerText = "⏳ 正在從自動化倉庫讀取最新單價...";
 
     try {
-        // 使用相對路徑讀取，並加上隨機參數強制刷新 GitHub 伺服器快取
+        // 使用相對路徑，並加上隨機參數強制刷新 GitHub 伺服器快取
         const res = await fetch('./data.json?nocache=' + new Date().getTime());
         
         if (!res.ok) {
-            throw new Error(`伺服器回應錯誤 (${res.status})。請確認 data.json 是否在 GitHub 根目錄。`);
+            throw new Error(`找不到數據檔案 (${res.status})。請確認 Actions 是否已成功跑完。`);
         }
 
         const data = await res.json();
         
-        // 增加資料結構檢查，適應不同的 API 鏡像格式
+        // 自動識別：支援官方原始格式或被包裝過的格式
         const market = data.marketplace ? data.marketplace : data;
 
         if (!market || !Array.isArray(market)) {
-            throw new Error("數據格式不正確 (找不到有效陣列)");
+            throw new Error("數據格式不正確 (找不到 marketplace 列表)");
         }
 
         items.forEach((item, i) => {
@@ -171,17 +171,14 @@ async function updatePrices() {
             // 建立標準的 MWI 物品路徑格式
             const hrid = `/items/${lvl}_${item.hrid_base}`;
             
-            // 強化匹配邏輯：同時嘗試包含與不包含 /items/ 的路徑
+            // 強化匹配邏輯：相容有無前綴的路徑
             const found = market.find(m => 
                 m.itemHrid === hrid || 
                 m.itemHrid === `${lvl}_${item.hrid_base}`
             );
             
             if (found) {
-                // 自動填入價格，ask 是最低賣價
                 document.getElementById(`prc-${i}`).value = found.ask;
-            } else {
-                console.warn(`找不到物品: ${hrid}`);
             }
         });
 
@@ -200,6 +197,7 @@ async function updatePrices() {
 </script>
 </body>
 </html>
+
 
 
 
