@@ -46,11 +46,15 @@
                 </thead>
                 <tbody id="config-body"></tbody>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
-                    <td colspan="2" style="color: var(--blue);">精煉碎片估價</td>
+                    <td colspan="2">精煉碎片</td>
                     <td colspan="2"><input type="number" id="refining-shard-price" value="2500000" oninput="calculate()"></td>
                 </tr>
-                <tr style="background: rgba(255, 215, 0, 0.05);">
-                    <td colspan="2" style="color: var(--gold);">紫多拉之盒估價</td>
+                <tr style="background: rgba(99, 179, 237, 0.05);">
+                    <td colspan="2">紫多拉之盒(生活)</td>
+                    <td colspan="2"><input type="number" id="box-price" value="900000" oninput="calculate()"></td>
+                </tr>
+                <tr style="background: rgba(99, 179, 237, 0.05);">
+                    <td colspan="2">紫多拉之盒(戰鬥)</td>
                     <td colspan="2"><input type="number" id="box-price" value="900000" oninput="calculate()"></td>
                 </tr>
             </table>
@@ -79,10 +83,10 @@
 </div>
 
 <script>
-// 1. 修正 items 設定：對齊官方 data.json 的名稱
+
 const items = [
     { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
-    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'curtain' }, // 官方用 curtain
+    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' },
     { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
     { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
     { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
@@ -108,7 +112,6 @@ function init() {
     calculate();
 }
 
-// 2. 修正計算邏輯：使用你要求的 labyrinth_refinement_shard 與 1.8 期望值
 function calculate() {
     let totalCost = 0;
     items.forEach((_, i) => {
@@ -203,10 +206,3 @@ window.onload = init;
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
