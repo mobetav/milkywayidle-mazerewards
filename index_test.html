@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>資料讀取測試</title>
+</head>
+<body>
+    <h1>市場單價數據</h1>
+    <div id="data-container">正在載入數據...</div>
+
+    <script>
+        async function loadMarketData() {
+            try {
+                // 讀取同資料夾下的 data.json
+                const response = await fetch('./data.json');
+                
+                if (!response.ok) {
+                    throw new Error('無法取得資料，請確保使用伺服器環境執行');
+                }
+
+                const data = await response.json();
+                
+                // 假設 data.json 是一個物件或陣列，這裡簡單轉成字串顯示
+                document.getElementById('data-container').innerHTML = 
+                    `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                console.log("資料讀取成功:", data);
+            } catch (error) {
+                document.getElementById('data-container').innerHTML = 
+                    `<p style="color:red;">讀取失敗: ${error.message}</p>
+                     <p>提示：請勿直接雙擊 HTML 檔案，需使用 Live Server 或本地伺服器。</p>`;
+                console.error("錯誤詳情:", error);
+            }
+        }
+
+        loadMarketData();
+    </script>
+</body>
+</html>
