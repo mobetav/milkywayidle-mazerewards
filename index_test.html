@@ -76,23 +76,41 @@
             </table>
             <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
                 * <b>代幣累計</b>：包含出口固定獎勵及房間期望產出。<br>
-                * <b>其他收益</b>：僅計算紫多拉之盒與第 6 層起的精煉碎片。
+                * <b>其他收益</b>：僅計算紫多拉之盒與第 6 層起的迷宮精煉寶箱。
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// 修正道具清單：對齊官方 data.json 的 hrid_base
+
 const items = [
     { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
-    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' }, // 官方名為 shroud
+    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' },
     { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
     { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
     { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
     { key: 'food', name: '食物箱', qty: 1, level: 'expert', hrid_base: 'food_crate' }
 ];
 
+function init() {
+    const body = document.getElementById('config-body');
+    body.innerHTML = items.map((item, i) => `
+        <tr>
+            <td>${item.name}</td>
+            <td>
+                <select id="lvl-${i}" onchange="calculate()">
+                    <option value="basic">基礎</option>
+                    <option value="advanced">進階</option>
+                    <option value="expert" selected>專家</option>
+                </select>
+            </td>
+            <td><input type="number" id="qty-${i}" value="${item.qty}" oninput="calculate()"></td>
+            <td><input type="number" id="prc-${i}" value="0" oninput="calculate()"></td>
+        </tr>
+    `).join('');
+    calculate();
+}
 // 初始化與同步邏輯
 async function updatePrices() {
     const status = document.getElementById('status-msg');
@@ -168,6 +186,7 @@ function calculate() {
             </tr>`;
     }
 }
+
 window.onload = init;
 </script>
 </body>
