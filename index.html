@@ -88,59 +88,55 @@
     }
 
     async function updatePrices() {
-        const status = document.getElementById('status-msg');
-        status.innerText = "⏳ 正在讀取本地自動化數據 (data.json)...";
-        try {
-            // 讀取 Actions 生成的 data.json 並強制刷新快取
-            const res = await fetch('./data.json?t=' + Date.now());
-            if (!res.ok) throw new Error("找不到數據檔案");
+    const status = document.getElementById('status-msg');
+    status.innerText = "⏳ 正在從自動化倉庫讀取最新單價...";
 
-            const data = await res.json();
-            const market = data.marketplace;
-
-            items.forEach((item, i) => {
-                const lvl = document.getElementById(`lvl-${i}`).value;
-                const hrid = `/items/${lvl}_${item.hrid_base}`;
-                const found = market.find(m => m.itemHrid === hrid);
-                if (found) {
-                    document.getElementById(`prc-${i}`).value = found.ask;
-                }
-            });
-
-            status.innerText = "✅ 同步成功！ (" + new Date().toLocaleTimeString() + ")";
-            status.style.color = "#4fd1c5";
-            calculate();
-        } catch (e) {
-            status.innerText = "❌ 失敗：" + e.message;
-            status.style.color = "#ff4d4d";
-        }
-    }
-
-    function calculate() {
-        let totalCost = 0;
-        items.forEach((_, i) => {
-            totalCost += (parseFloat(document.getElementById(`qty-${i}`).value) || 0) * (parseFloat(document.getElementById(`prc-${i}`).value) || 0);
-        });
-        document.getElementById('total-cost-display').innerText = `總預估成本：${Math.round(totalCost).toLocaleString()} Coins`;
-
-        const revBody = document.getElementById('revenue-body');
-        revBody.innerHTML = '';
-        const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
-        const shardPrice = parseFloat(document.getElementById('refining-shard-price').value) || 0;
+    try {
+        // 使用相對路徑讀取，並加上隨機參數強制刷新 GitHub 伺服器快取
+        const res = await fetch('./data.json?nocache=' + new Date().getTime());
         
-        let accTokens = 0, accOther = 0;
-        for (let l = 1; l <= 10; l++) {
-            accTokens += (5 * l) + (l * 0.5);
-            let layerOther = (l * 0.12) * boxVal;
-            if (l >= 6) {
-                // 根據您的機率圖計算出的期望值 1.8 (含 5% 大獎)
-                layerOther += ((l - 4) / 2) * 1.8 * shardPrice;
-            }
-            accOther += layerOther;
-            revBody.innerHTML += `<tr><td>到第 ${l} 層累計</td><td class="token-qty">${Math.round(accTokens)}</td><td class="other-val">${Math.round(accOther).toLocaleString()}</td></tr>`;
+        if (!res.ok) {
+            throw new Error(`伺服器回應錯誤 (${res.status})。請確認 data.json 是否在 GitHub 根目錄。`);
         }
+
+        const data = await res.json();
+        const market = data.marketplace;
+
+        if (!market || !Array.isArray(market)) {
+            throw new Error("數據格式不正確 (找不到 marketplace 陣列)");
+        }
+
+        items.forEach((item, i) => {
+            const lvl = document.getElementById(`lvl-${i}`).value;
+            // 建立標準的 MWI 物品路徑格式
+            const hrid = `/items/${lvl}_${item.hrid_base}`;
+            
+            // 強化匹配邏輯：同時嘗試包含與不包含 /items/ 的路徑
+            const found = market.find(m => 
+                m.itemHrid === hrid || 
+                m.itemHrid === `${lvl}_${item.hrid_base}`
+            );
+            
+            if (found) {
+                document.getElementById(`prc-${i}`).value = found.ask;
+            } else {
+                console.warn(`找不到物品: ${hrid}`);
+            }
+        });
+
+        status.innerText = "✅ 同步成功！(" + new Date().toLocaleTimeString() + ")";
+        status.style.color = "#4fd1c5";
+        calculate();
+        
+    } catch (e) {
+        console.error("讀取失敗:", e);
+        status.innerText = "❌ 失敗：" + e.message;
+        status.style.color = "#ff4d4d";
     }
+}
+    
     window.onload = init;
 </script>
 </body>
 </html>
+
