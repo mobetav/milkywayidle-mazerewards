@@ -93,7 +93,7 @@
 
     try {
         // 使用相對路徑讀取，並加上隨機參數強制刷新 GitHub 伺服器快取
-        const res = await fetch('./data.json?nocache=' + new Date().getTime());
+        const res = await fetch('./data.json);
         
         if (!res.ok) {
             throw new Error(`伺服器回應錯誤 (${res.status})。請確認 data.json 是否在 GitHub 根目錄。`);
@@ -139,4 +139,5 @@
 </script>
 </body>
 </html>
+
 
