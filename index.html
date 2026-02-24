@@ -79,108 +79,112 @@
 </div>
 
 <script>
-    const items = [
-        { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
-        { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' },
-        { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
-        { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
-        { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
-        { key: 'food', name: '食物箱', qty: 1, level: 'expert', hrid_base: 'food_crate' }
-    ];
+// 1. 修正 items 設定：對齊官方 data.json 的名稱
+const items = [
+    { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
+    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'curtain' }, // 官方用 curtain
+    { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
+    { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
+    { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
+    { key: 'food', name: '食物箱', qty: 1, level: 'expert', hrid_base: 'food_crate' }
+];
 
-    function init() {
-        const body = document.getElementById('config-body');
-        body.innerHTML = items.map((item, i) => `
-            <tr>
-                <td>${item.name}</td>
-                <td>
-                    <select id="lvl-${i}" onchange="calculate()">
-                        <option value="basic">基礎</option>
-                        <option value="advanced">進階</option>
-                        <option value="expert" selected>專家</option>
-                    </select>
-                </td>
-                <td><input type="number" id="qty-${i}" value="${item.qty}" oninput="calculate()"></td>
-                <td><input type="number" id="prc-${i}" value="0" oninput="calculate()"></td>
-            </tr>
-        `).join('');
-        calculate();
-    }
+function init() {
+    const body = document.getElementById('config-body');
+    body.innerHTML = items.map((item, i) => `
+        <tr>
+            <td>${item.name}</td>
+            <td>
+                <select id="lvl-${i}" onchange="calculate()">
+                    <option value="basic">基礎</option>
+                    <option value="advanced">進階</option>
+                    <option value="expert" selected>專家</option>
+                </select>
+            </td>
+            <td><input type="number" id="qty-${i}" value="${item.qty}" oninput="calculate()"></td>
+            <td><input type="number" id="prc-${i}" value="0" oninput="calculate()"></td>
+        </tr>
+    `).join('');
+    calculate();
+}
 
-    function calculate() {
-        let totalCost = 0;
-        items.forEach((_, i) => {
-            const q = parseFloat(document.getElementById(`qty-${i}`).value) || 0;
-            const p = parseFloat(document.getElementById(`prc-${i}`).value) || 0;
-            totalCost += q * p;
-        });
-        document.getElementById('total-cost-display').innerText = `總預估成本：${Math.round(totalCost).toLocaleString()}`;
+// 2. 修正計算邏輯：使用你要求的 labyrinth_refinement_shard 與 1.8 期望值
+function calculate() {
+    let totalCost = 0;
+    items.forEach((_, i) => {
+        const q = parseFloat(document.getElementById(`qty-${i}`).value) || 0;
+        const p = parseFloat(document.getElementById(`prc-${i}`).value) || 0;
+        totalCost += q * p;
+    });
+    document.getElementById('total-cost-display').innerText = `總預估成本：${Math.round(totalCost).toLocaleString()}`;
 
-        const revBody = document.getElementById('revenue-body');
-        revBody.innerHTML = '';
-        const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
-        const shardVal = parseFloat(document.getElementById('refining-shard-price').value) || 0;
+    const revBody = document.getElementById('revenue-body');
+    revBody.innerHTML = '';
+    const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
+    const shardVal = parseFloat(document.getElementById('refining-shard-price').value) || 0;
 
-        let accTokens = 0;
-        let accOtherRev = 0;
+    let accTokens = 0;
+    let accOtherRev = 0;
 
-        for (let l = 1; l <= 10; l++) {
-            const layerTokens = (5 * l) + (l * 0.5); 
-            accTokens += layerTokens;
-            let layerOtherRev = (l * 0.12) * boxVal;
-            if (l >= 6) {
-                const chestQty = (l - 4) / 2;
-                const shardQty = chestQty * 1.25;
-                layerOtherRev += (shardQty * shardVal);
-            }
-            accOtherRev += layerOtherRev;
-
-            revBody.innerHTML += `
-                <tr>
-                    <td>到第 ${l} 層出口累計</td>
-                    <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
-                    <td class="other-val">${Math.round(accOtherRev).toLocaleString()}</td>
-                </tr>
-            `;
+    for (let l = 1; l <= 10; l++) {
+        const layerTokens = (5 * l) + (l * 0.5); 
+        accTokens += layerTokens;
+        let layerOtherRev = (l * 0.12) * boxVal;
+        if (l >= 6) {
+            const chestQty = (l - 4) / 2;
+            // 根據你的機率圖修正為 1.8 期望值 (含 5% 大獎)
+            const shardQty = chestQty * 1.8; 
+            layerOtherRev += (shardQty * shardVal);
         }
-    }
+        accOtherRev += layerOtherRev;
 
+        revBody.innerHTML += `
+            <tr>
+                <td>到第 ${l} 層出口累計</td>
+                <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
+                <td class="other-val">${Math.round(accOtherRev).toLocaleString()}</td>
+            </tr>
+        `;
+    }
+}
+
+// 3. 修正同步邏輯：正確抓取 labyrinth_refinement_shard 與各類物品
 async function updatePrices() {
     const status = document.getElementById('status-msg');
-    status.innerText = "⏳ 正在從自動化倉庫讀取最新單價...";
+    status.innerText = "⏳ 正在分析自動化數據...";
 
     try {
-        // 修正路徑：改用 ./ 並強制刷新快取
         const res = await fetch('./data.json?nocache=' + new Date().getTime());
-        
-        if (!res.ok) {
-            throw new Error(`找不到數據檔案 (${res.status})`);
-        }
+        if (!res.ok) throw new Error(`找不到數據檔案 (${res.status})`);
 
         const data = await res.json();
-        
-        // 針對你的 data.json 結構：數據位於 marketData 物件中
         const market = data.marketData;
 
-        if (!market) {
-            throw new Error("數據格式不正確 (找不到 marketData)");
+        // A. 先更新精煉碎片單價 (labyrinth_refinement_shard)
+        const shardHrid = "/items/labyrinth_refinement_shard";
+        if (market[shardHrid] && market[shardHrid]["0"]) {
+            document.getElementById('refining-shard-price').value = market[shardHrid]["0"].a;
         }
 
+        // B. 更新各項消耗品單價
         items.forEach((item, i) => {
             const lvl = document.getElementById(`lvl-${i}`).value;
-            const hrid = `/items/${lvl}_${item.hrid_base}`;
+            // 嘗試兩種路徑格式 (有的帶等級前綴，有的不帶)
+            const possibleHrids = [
+                `/items/${lvl}_${item.hrid_base}`,
+                `/items/${item.hrid_base}`
+            ];
             
-            // 你的資料結構是透過 hrid 作為 key 直接存取
-            const itemData = market[hrid];
-            
-            if (itemData && itemData["0"]) {
-                // 在你的 JSON 中，"0" 代表強化等級 0，"a" 代表 ask (賣價)
-                const price = itemData["0"].a;
-                if (price && price > 0) {
-                    document.getElementById(`prc-${i}`).value = price;
+            let foundData = null;
+            for (let hrid of possibleHrids) {
+                if (market[hrid]) {
+                    foundData = market[hrid];
+                    break;
                 }
-            } else {
-                console.warn(`找不到物品數據: ${hrid}`);
+            }
+            
+            if (foundData && foundData["0"]) {
+                document.getElementById(`prc-${i}`).value = foundData["0"].a;
             }
         });
 
@@ -189,16 +193,17 @@ async function updatePrices() {
         calculate();
         
     } catch (e) {
-        console.error("讀取失敗:", e);
+        console.error("同步失敗:", e);
         status.innerText = "❌ 失敗：" + e.message;
         status.style.color = "#ff4d4d";
     }
 }
-    
-    window.onload = init;
+
+window.onload = init;
 </script>
 </body>
 </html>
+
 
 
 
