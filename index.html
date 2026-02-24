@@ -150,35 +150,37 @@ async function updatePrices() {
     status.innerText = "⏳ 正在從自動化倉庫讀取最新單價...";
 
     try {
-        // 使用相對路徑，並加上隨機參數強制刷新 GitHub 伺服器快取
+        // 修正路徑：改用 ./ 並強制刷新快取
         const res = await fetch('./data.json?nocache=' + new Date().getTime());
         
         if (!res.ok) {
-            throw new Error(`找不到數據檔案 (${res.status})。請確認 Actions 是否已成功跑完。`);
+            throw new Error(`找不到數據檔案 (${res.status})`);
         }
 
         const data = await res.json();
         
-        // 自動識別：支援官方原始格式或被包裝過的格式
-        const market = data.marketplace ? data.marketplace : data;
+        // 針對你的 data.json 結構：數據位於 marketData 物件中
+        const market = data.marketData;
 
-        if (!market || !Array.isArray(market)) {
-            throw new Error("數據格式不正確 (找不到 marketplace 列表)");
+        if (!market) {
+            throw new Error("數據格式不正確 (找不到 marketData)");
         }
 
         items.forEach((item, i) => {
             const lvl = document.getElementById(`lvl-${i}`).value;
-            // 建立標準的 MWI 物品路徑格式
             const hrid = `/items/${lvl}_${item.hrid_base}`;
             
-            // 強化匹配邏輯：相容有無前綴的路徑
-            const found = market.find(m => 
-                m.itemHrid === hrid || 
-                m.itemHrid === `${lvl}_${item.hrid_base}`
-            );
+            // 你的資料結構是透過 hrid 作為 key 直接存取
+            const itemData = market[hrid];
             
-            if (found) {
-                document.getElementById(`prc-${i}`).value = found.ask;
+            if (itemData && itemData["0"]) {
+                // 在你的 JSON 中，"0" 代表強化等級 0，"a" 代表 ask (賣價)
+                const price = itemData["0"].a;
+                if (price && price > 0) {
+                    document.getElementById(`prc-${i}`).value = price;
+                }
+            } else {
+                console.warn(`找不到物品數據: ${hrid}`);
             }
         });
 
@@ -197,6 +199,7 @@ async function updatePrices() {
 </script>
 </body>
 </html>
+
 
 
 
