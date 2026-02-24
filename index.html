@@ -22,7 +22,8 @@
         select, input { background: #0b0e14; color: var(--green); border: 1px solid var(--gold); padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box; }
         .token-qty { color: var(--green); font-weight: bold; text-align: center; }
         .other-val { color: var(--blue); font-weight: bold; text-align: right; }
-        .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; }
+        .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; transition: 0.2s; }
+        .btn-fetch:hover { background: #e6c200; transform: translateY(-1px); }
         .status { text-align: center; font-size: 0.8rem; color: #718096; margin-bottom: 10px; min-height: 1.2em; }
         .rev-table td:first-child { text-align: left; }
         .rev-table th:nth-child(2), .rev-table td:nth-child(2) { text-align: center; }
@@ -34,8 +35,8 @@
 <div class="container">
     <h2>銀河奶牛迷宮收益</h2>
     
-    <div id="status-msg" class="status">提示：若更新失敗，請檢查網路連線</div>
-    <button class="btn-fetch" onclick="updatePrices()">🔄 更新 API 即時價格 (多重代理模式)</button>
+    <div id="status-msg" class="status">提示：請點擊更新按鈕同步即時市場價格</div>
+    <button class="btn-fetch" onclick="updatePrices()">🔄 更新 API 即時價格 (Mooket 邏輯優化版)</button>
 
     <div class="grid-layout">
         <div>
@@ -146,54 +147,38 @@
 
     async function updatePrices() {
         const status = document.getElementById('status-msg');
-        status.innerText = "⏳ 正在同步數據 (第 1/2 次嘗試)...";
+        status.innerText = "⏳ 正在請求 API 數據 (透過備援代理伺服器)...";
         status.style.color = "#ffd700";
 
         const apiUrl = 'https://www.milkywayidle.com/game_data/marketplace.json';
-        
-        // 嘗試多重代理方案
-        const proxyUrls = [
-            `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}&cb=${Date.now()}`,
-            `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`
-        ];
+        // 使用更強大的 allorigins 穿透模式
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}&t=${Date.now()}`;
 
-        let dataFound = false;
+        try {
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error();
 
-        for (let i = 0; i < proxyUrls.length; i++) {
-            try {
-                if (i > 0) status.innerText = `⏳ 正在切換備援代理 (第 ${i + 1}/2 次嘗試)...`;
-                
-                const response = await fetch(proxyUrls[i]);
-                if (!response.ok) throw new Error();
+            const data = await response.json();
+            // 關鍵：處理 Mooket 類型的內容解析
+            const marketplaceData = JSON.parse(data.contents);
+            const market = marketplaceData.marketplace;
 
-                const result = await response.json();
-                // 處理 allorigins 的 contents 包裝或 corsproxy 的直接 JSON
-                const rawData = result.contents ? JSON.parse(result.contents) : result;
-                
-                if (rawData && rawData.marketplace) {
-                    const market = rawData.marketplace;
-                    items.forEach((item, j) => {
-                        const lvl = document.getElementById(`lvl-${j}`).value;
-                        const hrid = `/items/${lvl}_${item.hrid_base}`;
-                        const found = market.find(m => m.itemHrid === hrid);
-                        if (found) {
-                            document.getElementById(`prc-${j}`).value = found.ask;
-                        }
-                    });
-                    dataFound = true;
-                    break;
+            items.forEach((item, j) => {
+                const lvl = document.getElementById(`lvl-${j}`).value;
+                const hrid = `/items/${lvl}_${item.hrid_base}`;
+                const found = market.find(m => m.itemHrid === hrid);
+                if (found) {
+                    // 參考 Mooket 邏輯使用 ask 價格
+                    document.getElementById(`prc-${j}`).value = found.ask;
                 }
-            } catch (err) {
-                console.warn(`代理 ${i + 1} 請求失敗，嘗試下一個...`);
-            }
-        }
+            });
 
-        if (dataFound) {
-            status.innerText = "✅ 市場數據同步成功！ (" + new Date().toLocaleTimeString() + ")";
+            status.innerText = "✅ 同步成功！ (" + new Date().toLocaleTimeString() + ")";
             status.style.color = "#4fd1c5";
             calculate();
-        } else {
-            status.innerText = "❌ 無法從伺服器獲取數據。請檢查網路或手動輸入。";
+        } catch (err) {
+            console.error(err);
+            status.innerText = "❌ 讀取失敗。這通常是代理伺服器忙碌，請稍後再試。";
             status.style.color = "#ff4d4d";
         }
     }
