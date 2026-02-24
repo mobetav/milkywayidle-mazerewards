@@ -2,38 +2,173 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>資料讀取測試</title>
+    <title>銀河奶牛迷宮收益</title>
+    <style>
+        :root { --gold: #ffd700; --bg: #0b0e14; --panel: #1a1f29; --border: #2d3748; --text: #e2e8f0; --green: #4fd1c5; --blue: #63b3ed; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 1000px; background: var(--panel); padding: 30px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { color: var(--gold); text-align: center; margin-bottom: 25px; }
+        .grid-layout { display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.85rem; }
+        th { background: #2d3748; color: var(--gold); padding: 10px; text-align: left; }
+        td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        
+        /* 表格寬度比例 */
+        .config-table th:nth-child(1), .config-table td:nth-child(1) { width: 15%; }
+        .config-table th:nth-child(2), .config-table td:nth-child(2) { width: 15%; }
+        .config-table th:nth-child(3), .config-table td:nth-child(3) { width: 20%; }
+        .config-table th:nth-child(4), .config-table td:nth-child(4) { width: 20%; }
+
+        select, input { background: #0b0e14; color: var(--green); border: 1px solid var(--gold); padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        .token-qty { color: var(--green); font-weight: bold; text-align: center; }
+        .other-val { color: var(--blue); font-weight: bold; text-align: right; }
+        .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; transition: 0.2s; }
+        .btn-fetch:hover { background: #e6c200; transform: translateY(-1px); }
+        .status { text-align: center; font-size: 0.8rem; color: #718096; margin-bottom: 10px; min-height: 1.2em; }
+        .rev-table td:first-child { text-align: left; }
+        .rev-table th:nth-child(2), .rev-table td:nth-child(2) { text-align: center; }
+        .rev-table th:nth-child(3), .rev-table td:nth-child(3) { text-align: right; }
+    </style>
 </head>
 <body>
-    <h1>市場單價數據</h1>
-    <div id="data-container">正在載入數據...</div>
 
-    <script>
-        async function loadMarketData() {
-            try {
-                // 讀取同資料夾下的 data.json
-                const response = await fetch('./data.json');
-                
-                if (!response.ok) {
-                    throw new Error('無法取得資料，請確保使用伺服器環境執行');
-                }
+<div class="container">
+    <h2>銀河奶牛迷宮收益</h2>
+    
+    <div id="status-msg" class="status">提示：數據每 30 分鐘自動同步一次</div>
+    <button class="btn-fetch" onclick="updatePrices()">🔄 從本地倉庫同步最新單價</button>
 
-                const data = await response.json();
-                
-                // 假設 data.json 是一個物件或陣列，這裡簡單轉成字串顯示
-                document.getElementById('data-container').innerHTML = 
-                    `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-                
-                console.log("資料讀取成功:", data);
-            } catch (error) {
-                document.getElementById('data-container').innerHTML = 
-                    `<p style="color:red;">讀取失敗: ${error.message}</p>
-                     <p>提示：請勿直接雙擊 HTML 檔案，需使用 Live Server 或本地伺服器。</p>`;
-                console.error("錯誤詳情:", error);
-            }
+    <div class="grid-layout">
+        <div>
+            <table class="config-table">
+                <thead>
+                    <tr><th>項目</th><th>等級</th><th>數量</th><th>單價</th></tr>
+                </thead>
+                <tbody id="config-body"></tbody>
+                <tr style="background: rgba(99, 179, 237, 0.05);">
+                    <td colspan="2">迷宮精煉碎片單價 (用於估算迷宮精煉寶箱)</td>
+                    <td colspan="2"><input type="number" id="refining-shard-price" value="2500000" oninput="calculate()"></td>
+                </tr>
+                <tr style="background: rgba(99, 179, 237, 0.05);">
+                    <td colspan="2">紫多拉之盒(生活)</td>
+                    <td colspan="2"><input type="number" id="box-price" value="900000" oninput="calculate()"></td>
+                </tr>
+                <tr style="background: rgba(99, 179, 237, 0.05);">
+                    <td colspan="2">紫多拉之盒(戰鬥)</td>
+                    <td colspan="2"><input type="number" id="box-price" value="900000" oninput="calculate()"></td>
+                </tr>
+            </table>
+            <div id="total-cost-display" style="text-align: right; font-weight: bold; color: var(--gold); font-size: 1.1rem;">
+                總預估成本：0
+            </div>
+        </div>
+
+        <div>
+            <table class="rev-table">
+                <thead>
+                    <tr>
+                        <th>樓層進度</th>
+                        <th>代幣數量</th>
+                        <th>其他收益 (不含代幣)</th>
+                    </tr>
+                </thead>
+                <tbody id="revenue-body"></tbody>
+            </table>
+            <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                * <b>代幣累計</b>：包含出口固定獎勵及房間期望產出。<br>
+                * <b>其他收益</b>：僅計算紫多拉之盒與第 6 層起的精煉碎片。
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 修正道具清單：對齊官方 data.json 的 hrid_base
+const items = [
+    { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
+    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' }, // 官方名為 shroud
+    { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
+    { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
+    { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
+    { key: 'food', name: '食物箱', qty: 1, level: 'expert', hrid_base: 'food_crate' }
+];
+
+// 初始化與同步邏輯
+async function updatePrices() {
+    const status = document.getElementById('status-msg');
+    status.innerText = "⏳ 正在同步自動化數據...";
+
+    try {
+        const res = await fetch('./data.json?t=' + Date.now());
+        if (!res.ok) throw new Error("讀取 data.json 失敗");
+
+        const data = await res.json();
+        const market = data.marketData;
+
+        // 1. 同步精煉碎片單價 (用於計算寶箱價值)
+        const shardHrid = "/items/labyrinth_refinement_shard";
+        if (market[shardHrid] && market[shardHrid]["0"]) {
+            document.getElementById('refining-shard-price').value = market[shardHrid]["0"].a;
         }
 
-        loadMarketData();
-    </script>
+        // 2. 同步其他消耗品
+        items.forEach((item, i) => {
+            const lvl = document.getElementById(`lvl-${i}`).value;
+            const hrid = `/items/${lvl}_${item.hrid_base}`;
+            if (market[hrid] && market[hrid]["0"]) {
+                document.getElementById(`prc-${i}`).value = market[hrid]["0"].a;
+            }
+        });
+
+        status.innerText = "✅ 同步成功！";
+        calculate();
+    } catch (e) {
+        status.innerText = "❌ 失敗：" + e.message;
+    }
+}
+
+// 核心計算邏輯
+function calculate() {
+    let totalCost = 0;
+    items.forEach((_, i) => {
+        const q = parseFloat(document.getElementById(`qty-${i}`).value) || 0;
+        const p = parseFloat(document.getElementById(`prc-${i}`).value) || 0;
+        totalCost += q * p;
+    });
+    document.getElementById('total-cost-display').innerText = `總預估成本：${Math.round(totalCost).toLocaleString()}`;
+
+    const revBody = document.getElementById('revenue-body');
+    revBody.innerHTML = '';
+    const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
+    const shardVal = parseFloat(document.getElementById('refining-shard-price').value) || 0;
+
+    // 定義精煉寶箱的預期價值 (1.8 個碎片)
+    const SHARD_EXPECTANCY = 1.8;
+    const chestValue = SHARD_EXPECTANCY * shardVal;
+
+    let accTokens = 0, accOther = 0;
+    for (let l = 1; l <= 10; l++) {
+        accTokens += (5 * l) + (l * 0.5);
+        
+        // 其他收益：紫多拉之盒 (0.12/層)
+        let layerOther = (l * 0.12) * boxVal;
+        
+        // 其他收益：精煉寶箱 (6層起獲得，數量為 (L-4)/2)
+        if (l >= 6) {
+            const chestQty = (l - 4) / 2;
+            layerOther += (chestQty * chestValue);
+        }
+        
+        accOther += layerOther;
+        revBody.innerHTML += `
+            <tr>
+                <td>第 ${l} 層出口累計</td>
+                <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
+                <td class="other-val">${Math.round(accOther).toLocaleString()}</td>
+            </tr>`;
+    }
+}
+window.onload = init;
+</script>
 </body>
 </html>
