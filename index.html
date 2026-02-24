@@ -13,11 +13,11 @@
         th { background: #2d3748; color: var(--gold); padding: 10px; text-align: left; }
         td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
         
-        /* 調整左側表格寬度比例 */
-        .config-table th:nth-child(1), .config-table td:nth-child(1) { width: 15%; } /* 項目 調長 */
-        .config-table th:nth-child(2), .config-table td:nth-child(2) { width: 15%; } /* 等級 調長 */
-        .config-table th:nth-child(3), .config-table td:nth-child(3) { width: 20%; } /* 數量 調短 */
-        .config-table th:nth-child(4), .config-table td:nth-child(4) { width: 20%; } /* 單價 調短 */
+        /* 表格寬度比例 */
+        .config-table th:nth-child(1), .config-table td:nth-child(1) { width: 15%; }
+        .config-table th:nth-child(2), .config-table td:nth-child(2) { width: 15%; }
+        .config-table th:nth-child(3), .config-table td:nth-child(3) { width: 20%; }
+        .config-table th:nth-child(4), .config-table td:nth-child(4) { width: 20%; }
 
         select, input { background: #0b0e14; color: var(--green); border: 1px solid var(--gold); padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box; }
         .token-qty { color: var(--green); font-weight: bold; text-align: center; }
@@ -117,7 +117,6 @@
 
         const revBody = document.getElementById('revenue-body');
         revBody.innerHTML = '';
-        
         const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
         const shardVal = parseFloat(document.getElementById('refining-shard-price').value) || 0;
 
@@ -125,15 +124,11 @@
         let accOtherRev = 0;
 
         for (let l = 1; l <= 10; l++) {
-            // 1. 代幣數量計算 (出口 5*L + 寶箱房期望)
             const layerTokens = (5 * l) + (l * 0.5); 
             accTokens += layerTokens;
-            
-            // 2. 其他收益計算 (盒子 + 精煉)
-            let layerOtherRev = (l * 0.12) * boxVal; // 盒子掉落期望
+            let layerOtherRev = (l * 0.12) * boxVal;
             if (l >= 6) {
-                const chestQty = (l - 4) / 2; // 精煉箱數量
-                const shardQty = chestQty * 1.25; // 碎片期望值
+                const shardQty = ((l - 4) / 2) * 1.25;
                 layerOtherRev += (shardQty * shardVal);
             }
             accOtherRev += layerOtherRev;
@@ -148,12 +143,19 @@
         }
     }
 
-	async function updatePrices() {
+    async function updatePrices() {
         const status = document.getElementById('status-msg');
-        status.innerText = "⏳ 正在同步 API 數據...";
+        status.innerText = "⏳ 正在透過代理同步 API 數據...";
+        
+        const apiUrl = 'https://www.milkywayidle.com/game_data/marketplace.json';
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}&cacheBuster=${Date.now()}`;
+
         try {
-            const res = await fetch('https://www.milkywayidle.com/game_data/marketplace.json');
-            const data = await res.json();
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error('代理連線失敗');
+            
+            const wrapper = await res.json();
+            const data = JSON.parse(wrapper.contents);
             const market = data.marketplace;
 
             items.forEach((item, i) => {
@@ -161,10 +163,14 @@
                 const found = market.find(m => m.itemHrid === `/items/${lvl}_${item.hrid_base}`);
                 if (found) document.getElementById(`prc-${i}`).value = found.ask;
             });
+            
             status.innerText = "✅ 同步成功！ (" + new Date().toLocaleTimeString() + ")";
+            status.style.color = "#4fd1c5";
             calculate();
         } catch (e) {
-            status.innerText = "❌ 無法直接讀取。請部署至 GitHub Pages 後再試。";
+            console.error(e);
+            status.innerText = "❌ 同步失敗。請稍後再試或檢查網路。";
+            status.style.color = "#ff4d4d";
         }
     }
 
