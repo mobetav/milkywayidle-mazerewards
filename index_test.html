@@ -42,7 +42,7 @@
                 </thead>
                 <tbody id="config-body"></tbody>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
-                    <td colspan="2">精煉碎片單價 (預估寶箱用)</td>
+                    <td colspan="2">迷宮精煉碎片單價<br>(用於估算迷宮精煉寶箱)</td>
                     <td colspan="2"><input type="number" id="refining-shard-price" value="0" oninput="calculate()"></td>
                 </tr>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
@@ -138,7 +138,6 @@ async function updatePrices() {
         status.innerText = "❌ 同步錯誤: " + e.message;
     }
 }
-
 function calculate() {
     let totalCost = 0;
     items.forEach((_, i) => {
@@ -150,8 +149,11 @@ function calculate() {
     const pLife = parseFloat(document.getElementById('box-price-life').value) || 0;
     const pShard = parseFloat(document.getElementById('refining-shard-price').value) || 0;
     
+    // 1. 紫盒平均價 (生活與戰鬥平分 50/50)
     const avgBoxPrice = (pCombat + pLife) / 2;
-    const chestValue = 1.8 * pShard; // 基於 95% 1.5/箱, 5% 7.5/箱 的期望值
+    
+    // 2. 精煉寶箱期望價值 (1.8 碎片/箱，包含 5% 大獎機率)
+    const chestValue = 1.8 * pShard;
 
     const revBody = document.getElementById('revenue-body');
     revBody.innerHTML = '';
@@ -159,25 +161,33 @@ function calculate() {
     let accTokens = 0, accOther = 0;
 
     for (let l = 1; l <= 10; l++) {
-        // 1. 房間分布計算 (基於官方網格公式)
+        // --- 修正：最短路徑模型 (不含起點的移動步數) ---
         const gridSize = Math.min(3 + l, 8);
-        const totalRooms = gridSize * gridSize;
-        const chestRooms = Math.min(l, 6);
-        const challengeRooms = totalRooms - 2 - chestRooms;
+        const minSteps = (gridSize - 1) * 2; // 8x8 剛好是 14 步
+        
+        const totalRoomsInGrid = gridSize * gridSize;
+        const chestRoomsInFloor = Math.min(l, 6);
+        
+        // 假設寶箱房間均勻分佈，計算在最短路徑上遇到寶箱房的機率
+        // 扣除起點後，剩餘 totalRoomsInGrid - 1 個房間
+        const expectedChestsOnPath = (minSteps * chestRoomsInFloor) / (totalRoomsInGrid - 1);
+        
+        // 挑戰房間數 = 總步數 - 出口(1個) - 遇到的寶箱房
+        const challengeRoomsOnPath = Math.max(0, minSteps - 1 - expectedChestsOnPath);
 
-        // 2. 代幣期望值 (E = 挑戰 + 寶箱 + 出口)
-        const e_challenge_tokens = challengeRooms * Math.min(l * 0.05, 0.50);
-        const e_chest_tokens = chestRooms * Math.min(l, 10);
+        // 1. 代幣期望值
+        const e_challenge_tokens = challengeRoomsOnPath * Math.min(l * 0.05, 0.50);
+        const e_chest_tokens = expectedChestsOnPath * Math.min(l, 10);
         const e_exit_tokens = 5 * l;
         accTokens += (e_challenge_tokens + e_chest_tokens + e_exit_tokens);
 
-        // 3. 紫盒期望值
-        const e_challenge_boxes = challengeRooms * Math.min(l * 0.01, 0.10);
-        const e_chest_boxes = chestRooms * Math.min(l * 0.05, 0.50) * 2; // 生活戰鬥各一
-        const e_exit_boxes = (l >= 4) ? (l - 3) : 0; // 官方: (L-3)/2 各一，總合 L-3
+        // 2. 紫盒期望值 (依官方掉落率 + 平分單價)
+        const e_challenge_boxes = challengeRoomsOnPath * Math.min(l * 0.01, 0.10);
+        const e_chest_boxes = expectedChestsOnPath * Math.min(l * 0.05, 0.50) * 2; // 兩種各一
+        const e_exit_boxes = (l >= 4) ? (l - 3) : 0; // 出口固定獎勵
         const layerBoxesVal = (e_challenge_boxes + e_chest_boxes + e_exit_boxes) * avgBoxPrice;
 
-        // 4. 精煉寶箱期望值 (6層起出口獎勵)
+        // 3. 精煉寶箱期望值 (6層起出口獎勵，數量為 (L-4)/2)
         let layerRefiningVal = 0;
         if (l >= 6) {
             const refiningChestQty = (l - 4) / 2;
@@ -188,7 +198,7 @@ function calculate() {
 
         revBody.innerHTML += `
             <tr>
-                <td>到第 ${l} 層全清累計</td>
+                <td>到第 ${l} 層 (最短路徑 ${minSteps} 步)</td>
                 <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
                 <td class="other-val">${Math.round(accOther).toLocaleString()}</td>
             </tr>`;
