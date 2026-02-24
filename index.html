@@ -46,16 +46,16 @@
                 </thead>
                 <tbody id="config-body"></tbody>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
-                    <td colspan="2">精煉碎片</td>
-                    <td colspan="2"><input type="number" id="refining-shard-price" value="2500000" oninput="calculate()"></td>
+                    <td colspan="2">迷宮精煉碎片單價 (用於估算迷宮精煉寶箱)</td>
+                    <td colspan="2"><input type="number" id="refining-shard-price" value="0" oninput="calculate()"></td>
                 </tr>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
                     <td colspan="2">紫多拉之盒(生活)</td>
-                    <td colspan="2"><input type="number" id="box-price" value="900000" oninput="calculate()"></td>
+                    <td colspan="2"><input type="number" id="box-price" value="0" oninput="calculate()"></td>
                 </tr>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
                     <td colspan="2">紫多拉之盒(戰鬥)</td>
-                    <td colspan="2"><input type="number" id="box-price" value="900000" oninput="calculate()"></td>
+                    <td colspan="2"><input type="number" id="box-price" value="0" oninput="calculate()"></td>
                 </tr>
             </table>
             <div id="total-cost-display" style="text-align: right; font-weight: bold; color: var(--gold); font-size: 1.1rem;">
@@ -76,17 +76,17 @@
             </table>
             <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
                 * <b>代幣累計</b>：包含出口固定獎勵及房間期望產出。<br>
-                * <b>其他收益</b>：僅計算紫多拉之盒與第 6 層起的精煉碎片。
+                * <b>其他收益</b>：僅計算紫多拉之盒與第 6 層起的迷宮精煉寶箱。
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// 修正道具清單：對齊官方 data.json 的 hrid_base
+
 const items = [
     { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
-    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' }, // 迷宮斗篷是 shroud
+    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' },
     { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
     { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
     { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
@@ -111,23 +111,19 @@ function init() {
     `).join('');
     calculate();
 }
-
+// 初始化與同步邏輯
 async function updatePrices() {
     const status = document.getElementById('status-msg');
-    status.innerText = "⏳ 正在同步數據...";
+    status.innerText = "⏳ 正在同步自動化數據...";
 
     try {
-        // 使用相對路徑，避免 GitHub Pages 子路徑問題
         const res = await fetch('./data.json?t=' + Date.now());
         if (!res.ok) throw new Error("讀取 data.json 失敗");
 
         const data = await res.json();
-        // 您的資料格式是在 marketData 物件下
         const market = data.marketData;
 
-        if (!market) throw new Error("數據結構不匹配 (找不到 marketData)");
-
-        // 1. 同步精煉碎片 (labyrinth_refinement_shard)
+        // 1. 同步精煉碎片單價 (用於計算寶箱價值)
         const shardHrid = "/items/labyrinth_refinement_shard";
         if (market[shardHrid] && market[shardHrid]["0"]) {
             document.getElementById('refining-shard-price').value = market[shardHrid]["0"].a;
@@ -137,22 +133,19 @@ async function updatePrices() {
         items.forEach((item, i) => {
             const lvl = document.getElementById(`lvl-${i}`).value;
             const hrid = `/items/${lvl}_${item.hrid_base}`;
-            
-            // 物件讀取方式：market["/items/expert_torch"]["0"].a
             if (market[hrid] && market[hrid]["0"]) {
                 document.getElementById(`prc-${i}`).value = market[hrid]["0"].a;
             }
         });
 
-        status.innerText = "✅ 同步成功！(" + new Date().toLocaleTimeString() + ")";
-        status.style.color = "#4fd1c5";
+        status.innerText = "✅ 同步成功！";
         calculate();
     } catch (e) {
         status.innerText = "❌ 失敗：" + e.message;
-        status.style.color = "#ff4d4d";
     }
 }
 
+// 核心計算邏輯
 function calculate() {
     let totalCost = 0;
     items.forEach((_, i) => {
@@ -167,18 +160,33 @@ function calculate() {
     const boxVal = parseFloat(document.getElementById('box-price').value) || 0;
     const shardVal = parseFloat(document.getElementById('refining-shard-price').value) || 0;
 
+    // 定義精煉寶箱的預期價值 (1.8 個碎片)
+    const SHARD_EXPECTANCY = 1.8;
+    const chestValue = SHARD_EXPECTANCY * shardVal;
+
     let accTokens = 0, accOther = 0;
     for (let l = 1; l <= 10; l++) {
         accTokens += (5 * l) + (l * 0.5);
+        
+        // 其他收益：紫多拉之盒 (0.12/層)
         let layerOther = (l * 0.12) * boxVal;
+        
+        // 其他收益：精煉寶箱 (6層起獲得，數量為 (L-4)/2)
         if (l >= 6) {
-            // 包含 5% 大獎機率的精煉碎片期望值：1.8
-            layerOther += ((l - 4) / 2) * 1.8 * shardVal;
+            const chestQty = (l - 4) / 2;
+            layerOther += (chestQty * chestValue);
         }
+        
         accOther += layerOther;
-        revBody.innerHTML += `<tr><td>到第 ${l} 層累計</td><td class="token-qty">${Math.round(accTokens)}</td><td class="other-val">${Math.round(accOther).toLocaleString()}</td></tr>`;
+        revBody.innerHTML += `
+            <tr>
+                <td>第 ${l} 層出口累計</td>
+                <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
+                <td class="other-val">${Math.round(accOther).toLocaleString()}</td>
+            </tr>`;
     }
 }
+
 window.onload = init;
 </script>
 </body>
