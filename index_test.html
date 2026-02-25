@@ -24,8 +24,8 @@
         
         /* UI 獲利視覺化樣式 */
         .profit-val { font-weight: bold; text-align: right; }
-        .pos { color: var(--green); }
-        .neg { color: var(--red); }
+        .pos { color: var(--green); } /* 獲利顯示綠色 */
+        .neg { color: var(--red); }   /* 虧損顯示紅色 */
 
         .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; transition: 0.2s; }
         .btn-fetch:hover { background: #e6c200; transform: translateY(-1px); }
@@ -78,147 +78,10 @@
             <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
                 * <b>計算基礎</b>：基於網格大小 <code>MIN(3+L, 8)</code> 及各類房間掉落率。<br>
                 * <b>精煉寶箱</b>：採用您提供的 <b>1.8 碎片/箱</b> 加權期望值計算。<br>
-                * <b>價格誤差</b>：物品價格和即時物價有誤差時，請自行輸入正確價格。<br>
-                * <b>淨利潤</b>：其他收益期望 - 總預估成本。獲利顯示綠色，虧損顯示紅色。
+                * <b>利潤分析</b>：淨利潤 = 其他收益期望 - 總預估成本。獲利顯示綠色，虧損顯示紅色。
             </div>
         </div>
     </div>
 </div>
 
 <script>
-const items = [
-    { key: 'torch', name: '火把', qty: 100, level: 'expert', hrid_base: 'torch' },
-    { key: 'curtain', name: '斗篷', qty: 4, level: 'expert', hrid_base: 'shroud' },
-    { key: 'beacon', name: '信標', qty: 5, level: 'expert', hrid_base: 'beacon' },
-    { key: 'tea', name: '茶葉箱', qty: 1, level: 'expert', hrid_base: 'tea_crate' },
-    { key: 'coffee', name: '咖啡箱', qty: 1, level: 'expert', hrid_base: 'coffee_crate' },
-    { key: 'food', name: '食物箱', qty: 1, level: 'expert', hrid_base: 'food_crate' }
-];
-
-function init() {
-    const body = document.getElementById('config-body');
-    body.innerHTML = items.map((item, i) => `
-        <tr>
-            <td>${item.name}</td>
-            <td>
-                <select id="lvl-${i}" onchange="updatePrices()">
-                    <option value="basic" selected>基礎</option>
-                    <option value="advanced">進階</option>
-                    <option value="expert">專家</option>
-                </select>
-            </td>
-            <td><input type="number" id="qty-${i}" value="${item.qty}" oninput="calculate()"></td>
-            <td><input type="number" id="prc-${i}" value="0" oninput="calculate()"></td>
-        </tr>
-    `).join('');
-    calculate();
-}
-
-async function updatePrices() {
-    const status = document.getElementById('status-msg');
-    status.innerText = "⏳ 正在分析市場數據...";
-    try {
-        const res = await fetch('./data.json?t=' + Date.now());
-        if (!res.ok) throw new Error("讀取失敗");
-        const data = await res.json();
-        const market = data.marketData;
-
-        // 同步特殊物品
-        const keys = {
-            'refining-shard-price': "/items/labyrinth_refinement_shard",
-            'box-price-combat': "/items/pandoras_box",
-            'box-price-life': "/items/skill_pandoras_box"
-        };
-        for (let [id, hrid] of Object.entries(keys)) {
-            if (market[hrid]) document.getElementById(id).value = market[hrid]["0"].a;
-        }
-
-        // 同步消耗品 (依等級)
-        items.forEach((item, i) => {
-            const lvl = document.getElementById(`lvl-${i}`).value;
-            const hrid = `/items/${lvl}_${item.hrid_base}`;
-            if (market[hrid]) document.getElementById(`prc-${i}`).value = market[hrid]["0"].a;
-        });
-
-        status.innerText = "✅ 價格已同步 (" + new Date().toLocaleTimeString() + ")";
-        calculate();
-    } catch (e) {
-        status.innerText = "❌ 同步錯誤: " + e.message;
-    }
-}
-function calculate() {
-    let totalCost = 0;
-    items.forEach((_, i) => {
-        totalCost += (parseFloat(document.getElementById(`qty-${i}`).value) || 0) * (parseFloat(document.getElementById(`prc-${i}`).value) || 0);
-    });
-    document.getElementById('total-cost-display').innerText = `總預估成本：${Math.round(totalCost).toLocaleString()}`;
-
-    const pCombat = parseFloat(document.getElementById('box-price-combat').value) || 0;
-    const pLife = parseFloat(document.getElementById('box-price-life').value) || 0;
-    const pShard = parseFloat(document.getElementById('refining-shard-price').value) || 0;
-    
-    // 1. 紫盒平均價 (生活與戰鬥平分 50/50)
-    const avgBoxPrice = (pCombat + pLife) / 2;
-    
-    // 2. 精煉寶箱期望價值 (1.8 碎片/箱，包含 5% 大獎機率)
-    const chestValue = 1.8 * pShard;
-
-    const revBody = document.getElementById('revenue-body');
-    revBody.innerHTML = '';
-    
-    let accTokens = 0, accOther = 0;
-
-    for (let l = 1; l <= 10; l++) {
-        // --- 修正：最短路徑模型 (不含起點的移動步數) ---
-        const gridSize = Math.min(3 + l, 8);
-        const minSteps = (gridSize - 1) * 2; // 8x8 剛好是 14 步
-        
-        const totalRoomsInGrid = gridSize * gridSize;
-        const chestRoomsInFloor = Math.min(l, 6);
-        
-        // 假設寶箱房間均勻分佈，計算在最短路徑上遇到寶箱房的機率
-        // 扣除起點後，剩餘 totalRoomsInGrid - 1 個房間
-        const expectedChestsOnPath = (minSteps * chestRoomsInFloor) / (totalRoomsInGrid - 1);
-        
-        // 挑戰房間數 = 總步數 - 出口(1個) - 遇到的寶箱房
-        const challengeRoomsOnPath = Math.max(0, minSteps - 1 - expectedChestsOnPath);
-
-        // 1. 代幣期望值
-        const e_challenge_tokens = challengeRoomsOnPath * Math.min(l * 0.05, 0.50);
-        const e_chest_tokens = expectedChestsOnPath * Math.min(l, 10);
-        const e_exit_tokens = 5 * l;
-        accTokens += (e_challenge_tokens + e_chest_tokens + e_exit_tokens);
-
-        // 2. 紫盒期望值 (依官方掉落率 + 平分單價)
-        const e_challenge_boxes = challengeRoomsOnPath * Math.min(l * 0.01, 0.10);
-        const e_chest_boxes = expectedChestsOnPath * Math.min(l * 0.05, 0.50) * 2; // 兩種各一
-        const e_exit_boxes = (l >= 4) ? (l - 3) : 0; // 出口固定獎勵
-        const layerBoxesVal = (e_challenge_boxes + e_chest_boxes + e_exit_boxes) * avgBoxPrice;
-
-        // 3. 精煉寶箱期望值 (6層起出口獎勵，數量為 (L-4)/2)
-        let layerRefiningVal = 0;
-        if (l >= 6) {
-            const refiningChestQty = (l - 4) / 2;
-            layerRefiningVal = refiningChestQty * chestValue;
-        }
-
-        accOther += (layerBoxesVal + layerRefiningVal);
-
-        // 利潤自動分析 (淨利潤欄位)
-        const netProfit = accOther - totalCost;
-        // UI 獲利視覺化類別
-        const profitClass = netProfit >= 0 ? 'pos' : 'neg';
-
-        revBody.innerHTML += `
-            <tr>
-                <td>到第 ${l} 層 (${minSteps} 步)</td>
-                <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
-                <td class="other-val">${Math.round(accOther).toLocaleString()}</td>
-                <td class="profit-val ${profitClass}">${Math.round(netProfit).toLocaleString()}</td>
-            </tr>`;
-    }
-}
-window.onload = init;
-</script>
-</body>
-</html>
