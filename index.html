@@ -6,9 +6,9 @@
     <style>
         :root { --gold: #ffd700; --bg: #0b0e14; --panel: #1a1f29; --border: #2d3748; --text: #e2e8f0; --green: #4fd1c5; --blue: #63b3ed; --red: #fc8181; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 1000px; background: var(--panel); padding: 30px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .container { width: 100%; max-width: 1100px; background: var(--panel); padding: 30px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         h2 { color: var(--gold); text-align: center; margin-bottom: 25px; }
-        .grid-layout { display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; }
+        .grid-layout { display: grid; grid-template-columns: 1fr 1.3fr; gap: 20px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.85rem; }
         th { background: #2d3748; color: var(--gold); padding: 10px; text-align: left; }
         td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -57,7 +57,7 @@
                 </tr>
                 <tr style="background: rgba(99, 179, 237, 0.05);">
                     <td colspan="2">紫多拉之盒 (戰鬥)</td>
-                    <td colspan="2"><input type="number" id="box-price-combat" value="2500000" oninput="calculate()"></td>
+                    <td colspan="2"><input type="number" id="box-price-combat" value="2600000" oninput="calculate()"></td>
                 </tr>
             </table>
             <div id="total-cost-display" style="text-align: right; font-weight: bold; color: var(--gold); font-size: 1.1rem;">總預估成本：0</div>
@@ -67,19 +67,20 @@
             <table class="rev-table">
                 <thead>
                     <tr>
-                        <th>樓層(出口)累計</th>
-                        <th>代幣期望值</th>
-                        <th>其他收益期望</th>
-                        <th>預估淨利潤</th>
+                        <th>樓層(出口)</th>
+                        <th>火把消耗</th>
+                        <th>代幣期望</th>
+                        <th>其他收益</th>
+                        <th>預估淨利</th>
                     </tr>
                 </thead>
                 <tbody id="revenue-body"></tbody>
             </table>
             <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
-                * <b>計算基礎</b>：基於網格大小 <code>MIN(3+L, 8)</code> 及各類房間掉落率。<br>
+                * <b>火把消耗</b>：依據最短步數計算。基礎型 0% 保留，進階型 10% 保留，專家型 20% 保留。<br>
                 * <b>精煉寶箱</b>：採用 <b>1.8 碎片/箱</b> 加權期望值計算。<br>
-				* <b>價格誤差</b>：物品價格和即時物價有誤差時，請自行輸入正確價格。<br>
-                * <b>淨利潤</b>：其他收益期望 - 總預估成本。獲利顯示綠色，虧損顯示紅色。
+                * <b>淨利潤</b>：其他收益期望 - 總預估成本。獲利顯示綠色，虧損顯示紅色。<br>
+				* <b>價格誤差</b>：物品價格和即時物價有誤差時，請自行輸入正確價格。
             </div>
         </div>
     </div>
@@ -182,23 +183,33 @@ function calculate() {
     // 2. 精煉寶箱期望價值 (1.8 碎片/箱，包含 5% 大獎機率)
     const chestValue = 1.8 * pShard;
 
+    // 取得火把保留機率
+    const torchLvl = document.getElementById('lvl-0').value; // items[0] 是火把
+    let torchRetention = 0;
+    if (torchLvl === 'advanced') torchRetention = 0.1;
+    if (torchLvl === 'expert') torchRetention = 0.2;
+
     const revBody = document.getElementById('revenue-body');
     revBody.innerHTML = '';
     
-    let accTokens = 0, accOther = 0;
+    let accTokens = 0, accOther = 0, accTorchUsed = 0;
 
     for (let l = 1; l <= 10; l++) {
         // --- 修正：最短路徑模型 (不含起點的移動步數) ---
         const gridSize = Math.min(3 + l, 8);
         const minSteps = (gridSize - 1) * 2; // 8x8 剛好是 14 步
         
+        // 火把消耗期望計算：步數 * (1 - 保留率)
+        const layerTorchNeeded = minSteps * (1 - torchRetention);
+        accTorchUsed += layerTorchNeeded;
+
         const totalRoomsInGrid = gridSize * gridSize;
         const chestRoomsInFloor = Math.min(l, 6);
         
-        // 假設寶箱房間均勻分佈，計算在最短路徑上遇到寶箱房的機率
+		// 假設寶箱房間均勻分佈，計算在最短路徑上遇到寶箱房的機率
         // 扣除起點後，剩餘 totalRoomsInGrid - 1 個房間
         const expectedChestsOnPath = (minSteps * chestRoomsInFloor) / (totalRoomsInGrid - 1);
-        
+		
         // 挑戰房間數 = 總步數 - 出口(1個) - 遇到的寶箱房
         const challengeRoomsOnPath = Math.max(0, minSteps - 1 - expectedChestsOnPath);
 
@@ -230,7 +241,8 @@ function calculate() {
         // 套用 KMB 格式化顯示各項收益與利潤
         revBody.innerHTML += `
             <tr>
-                <td>第 ${l} 層 (${minSteps} 步)</td>
+                <td>L${l} (${minSteps} 步)</td>
+                <td>${accTorchUsed.toFixed(1)}</td>
                 <td class="token-qty">${formatKMB(accTokens)}</td>
                 <td class="other-val">${formatKMB(accOther)}</td>
                 <td class="profit-val ${profitClass}">${formatKMB(netProfit)}</td>
