@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>銀河奶牛迷宮收益</title>
     <style>
-        :root { --gold: #ffd700; --bg: #0b0e14; --panel: #1a1f29; --border: #2d3748; --text: #e2e8f0; --green: #4fd1c5; --blue: #63b3ed; }
+        :root { --gold: #ffd700; --bg: #0b0e14; --panel: #1a1f29; --border: #2d3748; --text: #e2e8f0; --green: #4fd1c5; --blue: #63b3ed; --red: #fc8181; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 1000px; background: var(--panel); padding: 30px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         h2 { color: var(--gold); text-align: center; margin-bottom: 25px; }
@@ -21,6 +21,12 @@
         select, input { background: #0b0e14; color: var(--green); border: 1px solid var(--gold); padding: 5px; border-radius: 4px; width: 100%; box-sizing: border-box; }
         .token-qty { color: var(--green); font-weight: bold; text-align: center; }
         .other-val { color: var(--blue); font-weight: bold; text-align: right; }
+        
+        /* UI 獲利視覺化樣式 */
+        .profit-val { font-weight: bold; text-align: right; }
+        .pos { color: var(--green); }
+        .neg { color: var(--red); }
+
         .btn-fetch { background: var(--gold); color: #1a202c; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; margin-bottom: 15px; transition: 0.2s; }
         .btn-fetch:hover { background: #e6c200; transform: translateY(-1px); }
         .status { text-align: center; font-size: 0.8rem; color: #718096; margin-bottom: 10px; min-height: 1.2em; }
@@ -63,7 +69,8 @@
                     <tr>
                         <th>樓層累計</th>
                         <th>代幣期望值</th>
-                        <th>其他收益期望值</th>
+                        <th>其他收益期望</th>
+                        <th>預估淨利潤</th>
                     </tr>
                 </thead>
                 <tbody id="revenue-body"></tbody>
@@ -71,7 +78,8 @@
             <div style="font-size: 0.75rem; color: #718096; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
                 * <b>計算基礎</b>：基於網格大小 <code>MIN(3+L, 8)</code> 及各類房間掉落率。<br>
                 * <b>精煉寶箱</b>：採用您提供的 <b>1.8 碎片/箱</b> 加權期望值計算。<br>
-				* <b>價格誤差</b>：物品價格和即時物價有誤差時，請自行輸入正確價格。
+                * <b>價格誤差</b>：物品價格和即時物價有誤差時，請自行輸入正確價格。<br>
+                * <b>淨利潤</b>：其他收益期望 - 總預估成本。獲利顯示綠色，虧損顯示紅色。
             </div>
         </div>
     </div>
@@ -196,11 +204,17 @@ function calculate() {
 
         accOther += (layerBoxesVal + layerRefiningVal);
 
+        // 利潤自動分析 (淨利潤欄位)
+        const netProfit = accOther - totalCost;
+        // UI 獲利視覺化類別
+        const profitClass = netProfit >= 0 ? 'pos' : 'neg';
+
         revBody.innerHTML += `
             <tr>
-                <td>到第 ${l} 層 (最短路徑 ${minSteps} 步)</td>
+                <td>到第 ${l} 層 (${minSteps} 步)</td>
                 <td class="token-qty">${Math.round(accTokens).toLocaleString()}</td>
                 <td class="other-val">${Math.round(accOther).toLocaleString()}</td>
+                <td class="profit-val ${profitClass}">${Math.round(netProfit).toLocaleString()}</td>
             </tr>`;
     }
 }
