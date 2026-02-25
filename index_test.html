@@ -230,7 +230,7 @@ function calculate() {
         // 套用 KMB 格式化顯示各項收益與利潤
         revBody.innerHTML += `
             <tr>
-                <td>到第 ${l} 層 (${minSteps} 步)</td>
+                <td>第 ${l} 層 (${minSteps} 步)</td>
                 <td class="token-qty">${formatKMB(accTokens)}</td>
                 <td class="other-val">${formatKMB(accOther)}</td>
                 <td class="profit-val ${profitClass}">${formatKMB(netProfit)}</td>
